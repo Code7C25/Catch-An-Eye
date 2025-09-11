@@ -1,0 +1,12 @@
+# Ignorar el entorno virtual y dependencias
+eye_env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.egg-info/
+.env
+.DS_Store
+.vscode/
