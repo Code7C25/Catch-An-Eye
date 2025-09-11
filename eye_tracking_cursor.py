@@ -1,6 +1,6 @@
 # --- IMPORTS ---
 import cv2
-import mediapipe as mp
+import mediapipe as mpgi
 import numpy as np
 import pyautogui
 pyautogui.FAILSAFE = False
