@@ -232,7 +232,7 @@ last_mouse_pos = pyautogui.position()
 frame_count = 0
 
 # --- LÓGICA PRINCIPAL ---
-with mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) as face_mesh:
+with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) as face_mesh:
     # Si existe archivo de calibración, cargar modelo SVR
     if os.path.exists(CALIBRATION_DATA_PATH):
         df = pd.read_csv(CALIBRATION_DATA_PATH)
