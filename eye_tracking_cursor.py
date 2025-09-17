@@ -373,7 +373,7 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 break
-            if key == ord('r'):
+            elif key == ord('r'):
                 calibrate(face_mesh, cap)
                 kalman_x = SimpleKalman()
                 kalman_y = SimpleKalman()
