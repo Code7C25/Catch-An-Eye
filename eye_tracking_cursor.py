@@ -1,4 +1,6 @@
-# --- FUNCIONES DE DETECCIÓN DE GUIÑO ---
+############################################################
+# FUNCIONES DE DETECCIÓN DE GUIÑO Y ASPECTO DE OJO
+############################################################
 def get_eye_aspect_ratio(landmarks, eye_indices):
     # Calcula la relación de aspecto del ojo (EAR) para detectar cierre
     p1 = np.array([landmarks[eye_indices[0]].x, landmarks[eye_indices[0]].y])
@@ -21,15 +23,15 @@ def is_right_wink(landmarks, threshold=0.20):
     right_eye_indices = [33, 160, 158, 133, 153, 144]
     ear = get_eye_aspect_ratio(landmarks, right_eye_indices)
     return ear < threshold
-# --- IMPORTS ---
+############################################################
+# IMPORTS Y CONFIGURACIÓN GLOBAL
+############################################################
 import cv2
 import mediapipe as mpgi
 import numpy as np
 import pyautogui
 pyautogui.FAILSAFE = False
 import pygetwindow as gw
-
-# --- CONFIGURACIÓN Y CONSTANTES ---
 from collections import deque
 import time
 from sklearn     .linear_model import LinearRegression
@@ -39,7 +41,31 @@ import pandas as pd
 import os
 import shutil
 
-# --- CLASES ---
+############################################################
+# CONFIGURACIÓN Y CONSTANTES DEL SISTEMA
+############################################################
+CURSOR_AVG_BUFFER = 5
+cursor_x_buffer = deque(maxlen=CURSOR_AVG_BUFFER)
+cursor_y_buffer = deque(maxlen=CURSOR_AVG_BUFFER)
+AUTO_BRIGHTNESS = True
+BRIGHTNESS_TARGET = 100
+BRIGHTNESS_TOLERANCE = 20
+BRIGHTNESS_ADJUST_EVERY = 30
+BRIGHTNESS_MIN = 0.2
+BRIGHTNESS_MAX = 0.8
+def focus_app_window():
+    try:
+        cv2.namedWindow("Catch-An-Eye - Control de Mouse", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("Catch-An-Eye - Control de Mouse", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        time.sleep(0.5)
+        windows = gw.getWindowsWithTitle("Catch-An-Eye - Control de Mouse")
+        if windows:
+            windows[0].activate()
+    except Exception as e:
+        print(f"No se pudo enfocar la ventana: {e}")
+############################################################
+# CLASES PARA SUAVIZADO Y FILTRO DE KALMAN
+############################################################
 class CursorSmoother:
     """Encapsula el historial de mirada y el umbral de movimiento adaptativo."""
     def __init__(self, initial_len=10):
@@ -72,7 +98,9 @@ class CursorSmoother:
                 self.vertical_history = deque(self.vertical_history, maxlen=new_len)
                 self.history_len = new_len
 
-# --- FUNCIÓN DE CALIBRACIÓN ---
+############################################################
+# FUNCIÓN DE CALIBRACIÓN DE MIRADA
+############################################################
 def calibrate(face_mesh, cap):
     print("Iniciando calibración. Mire los puntos rojos que aparecen en pantalla.")
     calibration_gaze = []
@@ -167,7 +195,9 @@ CALIBRATION_POINTS = [
 CALIBRATION_WAIT = 1.5  # Segundos por punto de calibración
 
 
-# --- FUNCIONES AUXILIARES ---
+############################################################
+# FUNCIONES AUXILIARES DE PROCESAMIENTO DE LANDMARKS Y MIRADA
+############################################################
 
 def get_eye_ratios(landmarks, eye_points, w, h):
     """Calcula los ratios de posición del iris dentro del ojo."""
@@ -198,63 +228,24 @@ def get_gaze_from_landmarks(face_landmarks, w, h, draw_frame=None):
         left_iris = [469, 470, 471, 472]
         right_eye = [33, 133]
         left_eye = [362, 263]
-        # Calcular centro del iris
         right_iris_coords = np.array([[face_landmarks.landmark[i].x * w, face_landmarks.landmark[i].y * h] for i in right_iris])
         left_iris_coords = np.array([[face_landmarks.landmark[i].x * w, face_landmarks.landmark[i].y * h] for i in left_iris])
         right_iris_center = np.mean(right_iris_coords, axis=0)
         left_iris_center = np.mean(left_iris_coords, axis=0)
-        # Calcular extremos del ojo
         right_eye_left = face_landmarks.landmark[right_eye[0]].x * w
         right_eye_right = face_landmarks.landmark[right_eye[1]].x * w
         left_eye_left = face_landmarks.landmark[left_eye[0]].x * w
         left_eye_right = face_landmarks.landmark[left_eye[1]].x * w
-        # Ratio horizontal: posición del iris entre extremos del ojo
         right_ratio = (right_iris_center[0] - right_eye_left) / (right_eye_right - right_eye_left)
         left_ratio = (left_iris_center[0] - left_eye_left) / (left_eye_right - left_eye_left)
-        # Ratio vertical: posición del iris en el eje Y (normalizado)
         right_vert = right_iris_center[1] / h
         left_vert = left_iris_center[1] / h
         gaze_horiz = (right_ratio + left_ratio) / 2
         gaze_vert = (right_vert + left_vert) / 2
-        print(f"Iris right: {right_iris_center}, left: {left_iris_center}")
-        print(f"Gaze ratios: horiz={gaze_horiz}, vert={gaze_vert}")
         return gaze_horiz, gaze_vert
     except Exception as e:
         print(f"Error en get_gaze_from_landmarks (iris): {e}")
         return 0.5, 0.5
-
-# --- INICIALIZACIÓN ---
-
-# Captura de cámara
-
-# --- INICIALIZACIÓN ---
-cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
-last_mouse_pos = pyautogui.position()
-frame_count = 0
-
-# Traer ventana de OpenCV al frente
-def focus_app_window():
-    try:
-        cv2.namedWindow("Catch-An-Eye - Control de Mouse", cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty("Catch-An-Eye - Control de Mouse", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        # Esperar a que la ventana se cree
-        time.sleep(0.5)
-        windows = gw.getWindowsWithTitle("Catch-An-Eye - Control de Mouse")
-        if windows:
-            windows[0].activate()
-    except Exception as e:
-        print(f"No se pudo enfocar la ventana: {e}")
-
-# Buffer para promediar las últimas N predicciones del cursor
-CURSOR_AVG_BUFFER = 5
-cursor_x_buffer = deque(maxlen=CURSOR_AVG_BUFFER)
-cursor_y_buffer = deque(maxlen=CURSOR_AVG_BUFFER)
-
-# --- AJUSTE AUTOMÁTICO DE BRILLO DE CÁMARA ---
-AUTO_BRIGHTNESS = True
-BRIGHTNESS_TARGET = 100  # Valor objetivo de brillo promedio (0-255)
 BRIGHTNESS_TOLERANCE = 20
 BRIGHTNESS_ADJUST_EVERY = 30  # Ajustar cada N frames
 BRIGHTNESS_MIN = 0.2  # Límite inferior (0.0-1.0)
@@ -263,14 +254,18 @@ BRIGHTNESS_MAX = 0.8  # Límite superior (0.0-1.0)
 # --- OPTIMIZACIÓN DE RENDIMIENTO ---
 # Puedes revertir quitando el bloque de reducción de frame y restaurando el bucle principal
 
-# --- INICIALIZACIÓN ---
+############################################################
+# INICIALIZACIÓN DE CÁMARA Y VARIABLES PRINCIPALES
+############################################################
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
 last_mouse_pos = pyautogui.position()
 frame_count = 0
 
-# --- LÓGICA PRINCIPAL ---
+############################################################
+# BUCLE PRINCIPAL DE PROCESAMIENTO Y CONTROL DE CURSOR
+############################################################
 with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) as face_mesh:
     # Calibración forzada al inicio (sin guardar ni cargar archivos)
     calibrate(face_mesh, cap)
@@ -281,11 +276,12 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
     focus_app_window()
     MAX_FAILED_FRAMES = 30  # Frames seguidos sin detección facial antes de advertir/pausar
     failed_frames = 0
+    print("[DEBUG] Bucle principal ejecutándose...")
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("Cámara no detectada. Intentando reconectar...")
+                print("[DEBUG] Cámara no detectada. Intentando reconectar...")
                 cap.release()
                 time.sleep(2)
                 cap = cv2.VideoCapture(0)
@@ -315,7 +311,7 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
                 if key == ord('q'):
                     break
                 elif key == ord('r'):
-                    svr_x, svr_y = calibrate(face_mesh, cap)
+                    calibrate(face_mesh, cap)
                     kalman_x = SimpleKalman()
                     kalman_y = SimpleKalman()
                     continue
@@ -336,8 +332,7 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
                 # --- DETECCIÓN DE GUIÑO DERECHO ---
                 wink_detected = is_right_wink(face_landmarks.landmark)
                 gaze_horiz, gaze_vert = get_gaze_from_landmarks(face_landmarks, FRAME_WIDTH, FRAME_HEIGHT, frame)
-                # print(f"[Loop] Gaze: horiz={gaze_horiz}, vert={gaze_vert}")  # Menos prints para más FPS
-                # print(f"[Loop] Landmarks: {[ (lm.x, lm.y) for lm in face_landmarks.landmark[:10] ]}")
+                print(f"[DEBUG] Landmarks detectados")
                 smoother.update(gaze_horiz, gaze_vert)
                 smooth_horiz, smooth_vert = smoother.get_smoothed()
                 # Mover el cursor directamente según la mirada suavizada
@@ -354,30 +349,27 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
                     avg_y = int(np.mean(cursor_y_buffer))
                     avg_x = int(np.clip(avg_x, 0, screen_width - 1))
                     avg_y = int(np.clip(avg_y, 0, screen_height - 1))
-                    # print(f"Gaze: ({smooth_horiz:.2f}, {smooth_vert:.2f}) | Cursor: ({avg_x}, {avg_y}) | Threshold: {smoother.move_threshold}")
                     try:
                         pyautogui.moveTo(avg_x, avg_y, duration=0.03)
+                        print(f"[DEBUG] Moviendo cursor a: ({avg_x}, {avg_y})")
                         last_mouse_pos = (avg_x, avg_y)
                     except Exception as e:
                         print(f"Error moviendo el cursor: {e}")
-                    # cv2.putText(frame, f"Cursor: ({avg_x}, {avg_y})", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)  # Menos overlays para más FPS
                     # --- CLICK POR GUIÑO DERECHO ---
                     if wink_detected:
                         pyautogui.click(avg_x, avg_y)
-                        # cv2.putText(frame, "Click por guiño!", (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        print("[DEBUG] Click por guiño detectado")
                 else:
-                    # cv2.putText(frame, "Inicializando suavizado...", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+                    pass
             else:
+                cv2.putText(frame, "Rostro no detectado", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 pass
             cv2.imshow("Catch-An-Eye - Control de Mouse", frame)
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                break
-            elif key == ord('r'):
+            if key == ord('r'):
                 calibrate(face_mesh, cap)
                 kalman_x = SimpleKalman()
                 kalman_y = SimpleKalman()
-                continue
     except Exception as e:
         print(f"Error en el bucle principal: {e}")
     finally:
