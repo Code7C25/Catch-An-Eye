@@ -19,9 +19,14 @@ def get_eye_aspect_ratio(landmarks, eye_indices):
 
 def is_right_wink(landmarks, threshold=0.20):
     # Indices del ojo derecho según mediapipe (ojo del usuario, no de la imagen)
-    # [33, 160, 158, 133, 153, 144] (puedes ajustar si lo ves necesario)
     right_eye_indices = [33, 160, 158, 133, 153, 144]
     ear = get_eye_aspect_ratio(landmarks, right_eye_indices)
+    return ear < threshold
+
+def is_left_wink(landmarks, threshold=0.20):
+    # Indices del ojo izquierdo según mediapipe (ojo del usuario, no de la imagen)
+    left_eye_indices = [263, 387, 385, 362, 380, 373]
+    ear = get_eye_aspect_ratio(landmarks, left_eye_indices)
     return ear < threshold
 ############################################################
 # IMPORTS Y CONFIGURACIÓN GLOBAL
@@ -352,8 +357,9 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
                 face_landmarks = results.multi_face_landmarks[0]
                 # El escalado de landmarks es innecesario, se elimina
 
-                # --- DETECCIÓN DE GUIÑO DERECHO ---
-                wink_detected = is_right_wink(face_landmarks.landmark)
+                # --- DETECCIÓN DE GUIÑOS ---
+                right_wink = is_right_wink(face_landmarks.landmark)
+                left_wink = is_left_wink(face_landmarks.landmark)
                 gaze_horiz, gaze_vert = get_gaze_from_landmarks(face_landmarks, FRAME_WIDTH, FRAME_HEIGHT, frame)
                 if DEBUG:
                     print(f"[DEBUG] Landmarks detectados")
@@ -382,11 +388,16 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
                         last_mouse_pos = (avg_x, avg_y)
                     except Exception as e:
                         print(f"Error moviendo el cursor: {e}")
-                    # --- CLICK POR GUIÑO DERECHO ---
-                    if wink_detected:
-                        pyautogui.click(avg_x, avg_y)
+                    # --- CLICK POR GUIÑOS ---
+                    if left_wink and not right_wink:
+                        pyautogui.click(avg_x, avg_y, button='left')
                         if DEBUG:
-                            print("[DEBUG] Click por guiño detectado")
+                            print("[DEBUG] Click izquierdo por guiño izquierdo")
+                    elif right_wink and not left_wink:
+                        pyautogui.click(avg_x, avg_y, button='right')
+                        if DEBUG:
+                            print("[DEBUG] Click derecho por guiño derecho")
+                    # Si ambos ojos guiñan, no hacer nada
                 else:
                     pass
             else:
