@@ -34,12 +34,7 @@ pyautogui.FAILSAFE = False
 import pygetwindow as gw
 from collections import deque
 import time
-from sklearn     .linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.svm import SVR
-import pandas as pd
-import os
-import shutil
+DEBUG = True
 
 ############################################################
 # CONFIGURACIÓN Y CONSTANTES DEL SISTEMA
@@ -154,7 +149,26 @@ def calibrate(face_mesh, cap):
         cap.release()
         exit()
     print("Calibración completa. Control de cursor activado.")
-    # No se usa SVR, no se devuelve nada
+    # Ajuste affine: calcular matriz de transformación de ratios a pantalla
+    calibration_gaze = np.array(calibration_gaze)
+    calibration_screen = np.array(calibration_screen)
+    # Normalizar ratios de mirada (gaze) entre 0 y 1
+    min_gaze = np.min(calibration_gaze, axis=0)
+    max_gaze = np.max(calibration_gaze, axis=0)
+    norm_gaze = (calibration_gaze - min_gaze) / (max_gaze - min_gaze + 1e-8)
+    # Ajuste lineal: resolver Ax = b para mapeo affine
+    A = np.hstack([norm_gaze, np.ones((norm_gaze.shape[0], 1))])
+    bx = calibration_screen[:, 0]
+    by = calibration_screen[:, 1]
+    coeffs_x, _, _, _ = np.linalg.lstsq(A, bx, rcond=None)
+    coeffs_y, _, _, _ = np.linalg.lstsq(A, by, rcond=None)
+    # Guardar parámetros globales
+    global affine_min_gaze, affine_max_gaze, affine_coeffs_x, affine_coeffs_y
+    affine_min_gaze = min_gaze
+    affine_max_gaze = max_gaze
+    affine_coeffs_x = coeffs_x
+    affine_coeffs_y = coeffs_y
+    print("[DEBUG] Parámetros de calibración affine guardados.")
     return None, None
 
 # --- CONFIGURACIÓN Y CONSTANTES ---
@@ -242,6 +256,8 @@ def get_gaze_from_landmarks(face_landmarks, w, h, draw_frame=None):
         left_vert = left_iris_center[1] / h
         gaze_horiz = (right_ratio + left_ratio) / 2
         gaze_vert = (right_vert + left_vert) / 2
+        gaze_horiz = np.clip(gaze_horiz, 0, 1)
+        gaze_vert = np.clip(gaze_vert, 0, 1)
         return gaze_horiz, gaze_vert
     except Exception as e:
         print(f"Error en get_gaze_from_landmarks (iris): {e}")
@@ -269,6 +285,18 @@ frame_count = 0
 with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) as face_mesh:
     # Calibración forzada al inicio (sin guardar ni cargar archivos)
     calibrate(face_mesh, cap)
+    # Definir función para transformar ratios de mirada a coordenadas de pantalla
+    def gaze_to_screen(horiz, vert):
+        # Normalizar usando parámetros de calibración
+        gaze = np.array([horiz, vert])
+        norm = (gaze - affine_min_gaze) / (affine_max_gaze - affine_min_gaze + 1e-8)
+        A = np.array([norm[0], norm[1], 1.0])
+        x = np.dot(affine_coeffs_x, A)
+        y = np.dot(affine_coeffs_y, A)
+        # Limitar a pantalla
+        x = int(np.clip(x, 0, screen_width - 1))
+        y = int(np.clip(y, 0, screen_height - 1))
+        return x, y
     kalman_x = SimpleKalman()
     kalman_y = SimpleKalman()
     cv2.namedWindow("Catch-An-Eye - Control de Mouse", cv2.WND_PROP_FULLSCREEN)
@@ -322,26 +350,24 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
             if results.multi_face_landmarks:
                 failed_frames = 0
                 face_landmarks = results.multi_face_landmarks[0]
-                # Escalar landmarks a frame original
-                scale_x = FRAME_WIDTH / (FRAME_WIDTH // 2)
-                scale_y = FRAME_HEIGHT / (FRAME_HEIGHT // 2)
-                for lm in face_landmarks.landmark:
-                    lm.x *= scale_x
-                    lm.y *= scale_y
+                # El escalado de landmarks es innecesario, se elimina
 
                 # --- DETECCIÓN DE GUIÑO DERECHO ---
                 wink_detected = is_right_wink(face_landmarks.landmark)
                 gaze_horiz, gaze_vert = get_gaze_from_landmarks(face_landmarks, FRAME_WIDTH, FRAME_HEIGHT, frame)
-                print(f"[DEBUG] Landmarks detectados")
+                if DEBUG:
+                    print(f"[DEBUG] Landmarks detectados")
                 smoother.update(gaze_horiz, gaze_vert)
                 smooth_horiz, smooth_vert = smoother.get_smoothed()
-                # Mover el cursor directamente según la mirada suavizada
-                pred_x = int(smooth_horiz * screen_width)
-                pred_y = int(smooth_vert * screen_height)
-                pred_x = int(np.clip(pred_x, 0, screen_width - 1))
-                pred_y = int(np.clip(pred_y, 0, screen_height - 1))
+                if DEBUG:
+                    print(f"[DEBUG] Ratios de mirada suavizados: horiz={smooth_horiz:.3f}, vert={smooth_vert:.3f}")
+                pred_x, pred_y = gaze_to_screen(smooth_horiz, smooth_vert)
+                if DEBUG:
+                    print(f"[DEBUG] Coordenadas transformadas (affine): x={pred_x}, y={pred_y}")
                 pred_x = int(kalman_x.input_latest_noisy_measurement(pred_x))
                 pred_y = int(kalman_y.input_latest_noisy_measurement(pred_y))
+                if DEBUG:
+                    print(f"[DEBUG] Coordenadas tras Kalman: x={pred_x}, y={pred_y}")
                 cursor_x_buffer.append(pred_x)
                 cursor_y_buffer.append(pred_y)
                 if len(cursor_x_buffer) == CURSOR_AVG_BUFFER and len(cursor_y_buffer) == CURSOR_AVG_BUFFER:
@@ -351,14 +377,16 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
                     avg_y = int(np.clip(avg_y, 0, screen_height - 1))
                     try:
                         pyautogui.moveTo(avg_x, avg_y, duration=0.03)
-                        print(f"[DEBUG] Moviendo cursor a: ({avg_x}, {avg_y})")
+                        if DEBUG:
+                            print(f"[DEBUG] Moviendo cursor a: ({avg_x}, {avg_y})")
                         last_mouse_pos = (avg_x, avg_y)
                     except Exception as e:
                         print(f"Error moviendo el cursor: {e}")
                     # --- CLICK POR GUIÑO DERECHO ---
                     if wink_detected:
                         pyautogui.click(avg_x, avg_y)
-                        print("[DEBUG] Click por guiño detectado")
+                        if DEBUG:
+                            print("[DEBUG] Click por guiño detectado")
                 else:
                     pass
             else:
