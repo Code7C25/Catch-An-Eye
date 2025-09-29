@@ -44,7 +44,7 @@ DEBUG = True
 ############################################################
 # CONFIGURACIÓN Y CONSTANTES DEL SISTEMA
 ############################################################
-CURSOR_AVG_BUFFER = 20  # Buffer más grande para mayor suavizado
+CURSOR_AVG_BUFFER = 5
 cursor_x_buffer = deque(maxlen=CURSOR_AVG_BUFFER)
 cursor_y_buffer = deque(maxlen=CURSOR_AVG_BUFFER)
 AUTO_BRIGHTNESS = True
@@ -360,63 +360,44 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
                 # --- DETECCIÓN DE GUIÑOS ---
                 right_wink = is_right_wink(face_landmarks.landmark)
                 left_wink = is_left_wink(face_landmarks.landmark)
-                # Usar el ojo derecho para ratios de pupila
-                right_eye_indices = [33, 133, 160, 158, 153, 144]  # borde y centro del ojo derecho
-                horiz_ratio, vert_ratio = get_eye_ratios(face_landmarks.landmark, right_eye_indices, FRAME_WIDTH, FRAME_HEIGHT)
-                # Normalizar y recortar los ratios entre 0 y 1
-                horiz_ratio = np.clip(horiz_ratio, 0, 1)
-                vert_ratio = np.clip(vert_ratio, 0, 1)
+                gaze_horiz, gaze_vert = get_gaze_from_landmarks(face_landmarks, FRAME_WIDTH, FRAME_HEIGHT, frame)
                 if DEBUG:
-                    print(f"[DEBUG] Ratios pupila ojo derecho (clipped): horiz={horiz_ratio:.3f}, vert={vert_ratio:.3f}")
-                # Print para verificar rango de ratios
-                if not hasattr(globals(), 'min_horiz_ratio'):
-                    globals()['min_horiz_ratio'] = horiz_ratio
-                    globals()['max_horiz_ratio'] = horiz_ratio
-                    globals()['min_vert_ratio'] = vert_ratio
-                    globals()['max_vert_ratio'] = vert_ratio
-                else:
-                    globals()['min_horiz_ratio'] = min(globals()['min_horiz_ratio'], horiz_ratio)
-                    globals()['max_horiz_ratio'] = max(globals()['max_horiz_ratio'], horiz_ratio)
-                    globals()['min_vert_ratio'] = min(globals()['min_vert_ratio'], vert_ratio)
-                    globals()['max_vert_ratio'] = max(globals()['max_vert_ratio'], vert_ratio)
-                if DEBUG:
-                    print(f"[DEBUG] Rango horiz_ratio: min={globals()['min_horiz_ratio']:.3f}, max={globals()['max_horiz_ratio']:.3f}")
-                    print(f"[DEBUG] Rango vert_ratio: min={globals()['min_vert_ratio']:.3f}, max={globals()['max_vert_ratio']:.3f}")
-                smoother.update(horiz_ratio, vert_ratio)
+                    print(f"[DEBUG] Landmarks detectados")
+                smoother.update(gaze_horiz, gaze_vert)
                 smooth_horiz, smooth_vert = smoother.get_smoothed()
-                pred_x = int(smooth_horiz * screen_width)
-                pred_y = int(smooth_vert * screen_height)
+                if DEBUG:
+                    print(f"[DEBUG] Ratios de mirada suavizados: horiz={smooth_horiz:.3f}, vert={smooth_vert:.3f}")
+                pred_x, pred_y = gaze_to_screen(smooth_horiz, smooth_vert)
+                if DEBUG:
+                    print(f"[DEBUG] Coordenadas transformadas (affine): x={pred_x}, y={pred_y}")
                 pred_x = int(kalman_x.input_latest_noisy_measurement(pred_x))
                 pred_y = int(kalman_y.input_latest_noisy_measurement(pred_y))
                 if DEBUG:
                     print(f"[DEBUG] Coordenadas tras Kalman: x={pred_x}, y={pred_y}")
-                # Solo mover si el cambio supera un umbral mínimo
-                MOVE_THRESHOLD = 2  # Umbral reducido para mayor sensibilidad
-                if abs(pred_x - last_mouse_pos[0]) > MOVE_THRESHOLD or abs(pred_y - last_mouse_pos[1]) > MOVE_THRESHOLD:
-                    cursor_x_buffer.append(pred_x)
-                    cursor_y_buffer.append(pred_y)
-                    if len(cursor_x_buffer) == CURSOR_AVG_BUFFER and len(cursor_y_buffer) == CURSOR_AVG_BUFFER:
-                        avg_x = int(np.mean(cursor_x_buffer))
-                        avg_y = int(np.mean(cursor_y_buffer))
-                        avg_x = int(np.clip(avg_x, 0, screen_width - 1))
-                        avg_y = int(np.clip(avg_y, 0, screen_height - 1))
-                        try:
-                            pyautogui.moveTo(avg_x, avg_y, duration=0.03)
-                            if DEBUG:
-                                print(f"[DEBUG] Moviendo cursor a: ({avg_x}, {avg_y})")
-                            last_mouse_pos = (avg_x, avg_y)
-                        except Exception as e:
-                            print(f"Error moviendo el cursor: {e}")
-                        # --- CLICK POR GUIÑOS ---
-                        if left_wink and not right_wink:
-                            pyautogui.click(avg_x, avg_y, button='left')
-                            if DEBUG:
-                                print("[DEBUG] Click izquierdo por guiño izquierdo")
-                        elif right_wink and not left_wink:
-                            pyautogui.click(avg_x, avg_y, button='right')
-                            if DEBUG:
-                                print("[DEBUG] Click derecho por guiño derecho")
-                        # Si ambos ojos guiñan, no hacer nada
+                cursor_x_buffer.append(pred_x)
+                cursor_y_buffer.append(pred_y)
+                if len(cursor_x_buffer) == CURSOR_AVG_BUFFER and len(cursor_y_buffer) == CURSOR_AVG_BUFFER:
+                    avg_x = int(np.mean(cursor_x_buffer))
+                    avg_y = int(np.mean(cursor_y_buffer))
+                    avg_x = int(np.clip(avg_x, 0, screen_width - 1))
+                    avg_y = int(np.clip(avg_y, 0, screen_height - 1))
+                    try:
+                        pyautogui.moveTo(avg_x, avg_y, duration=0.03)
+                        if DEBUG:
+                            print(f"[DEBUG] Moviendo cursor a: ({avg_x}, {avg_y})")
+                        last_mouse_pos = (avg_x, avg_y)
+                    except Exception as e:
+                        print(f"Error moviendo el cursor: {e}")
+                    # --- CLICK POR GUIÑOS ---
+                    if left_wink and not right_wink:
+                        pyautogui.click(avg_x, avg_y, button='left')
+                        if DEBUG:
+                            print("[DEBUG] Click izquierdo por guiño izquierdo")
+                    elif right_wink and not left_wink:
+                        pyautogui.click(avg_x, avg_y, button='right')
+                        if DEBUG:
+                            print("[DEBUG] Click derecho por guiño derecho")
+                    # Si ambos ojos guiñan, no hacer nada
                 else:
                     pass
             else:

@@ -1,17 +1,7 @@
 # Requisitos del proyecto
-opencv-python
-mediapipe
-jax
-jaxlib
-numpy
-scipy
-matplotlib
-pandas
-pyautogui
-mouseinfo
-pygetwindow
-pymsgbox
-sounddevice
-attrs
-absl-py
-scikit-learn
+opencv-python      # Procesamiento de imágenes y video
+mediapipe         # Detección facial y landmarks (Google)
+numpy             # Operaciones matemáticas y matrices
+pyautogui         # Control del mouse y teclado
+pygetwindow       # Gestión de ventanas en el sistema
+collections       # Estructuras de datos (deque)
