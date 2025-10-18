@@ -1,6 +1,9 @@
 ############################################################
 # FUNCIONES DE DETECCIÓN DE GUIÑO Y ASPECTO DE OJO
 ############################################################
+from numba import njit
+
+@njit
 def get_eye_aspect_ratio(landmarks, eye_indices):
     # Calcula la relación de aspecto del ojo (EAR) para detectar cierre
     p1 = np.array([landmarks[eye_indices[0]].x, landmarks[eye_indices[0]].y])
@@ -28,15 +31,26 @@ def is_left_wink(landmarks, threshold=0.20):
     left_eye_indices = [263, 387, 385, 362, 380, 373]
     ear = get_eye_aspect_ratio(landmarks, left_eye_indices)
     return ear < threshold
+
 ############################################################
 # IMPORTS Y CONFIGURACIÓN GLOBAL
 ############################################################
 import cv2
-import mediapipe as mpgi
+import mediapipe as mpgi  # Solo versión CPU, no GPU
 import numpy as np
 import pyautogui
 pyautogui.FAILSAFE = False
 import pygetwindow as gw
+import sys
+
+# Verificar soporte CUDA en OpenCV
+try:
+    cuda_devices = cv2.cuda.getCudaEnabledDeviceCount()
+    print(f"[INFO] Dispositivos CUDA detectados por OpenCV: {cuda_devices}")
+    if cuda_devices == 0:
+        print("[ADVERTENCIA] OpenCV no detecta GPU CUDA. Verifica tu instalación de drivers y opencv-contrib-python.")
+except Exception as e:
+    print(f"[ERROR] No se pudo verificar CUDA en OpenCV: {e}")
 from collections import deque
 import time
 DEBUG = True
@@ -63,6 +77,7 @@ def focus_app_window():
             windows[0].activate()
     except Exception as e:
         print(f"No se pudo enfocar la ventana: {e}")
+        
 ############################################################
 # CLASES PARA SUAVIZADO Y FILTRO DE KALMAN
 ############################################################
@@ -179,12 +194,14 @@ def calibrate(face_mesh, cap):
 # --- CONFIGURACIÓN Y CONSTANTES ---
 
 # Configuración de pantalla
-screen_width, screen_height = pyautogui.size()  # Usar resolución real de pantalla
+
+# Usar resolución moderada para la cámara
+FRAME_WIDTH = 1280
+FRAME_HEIGHT = 720
+screen_width, screen_height = pyautogui.size()  # Mantener el mapeo a pantalla completa
 
 # Parámetros de optimización
-FRAME_WIDTH = screen_width      
-FRAME_HEIGHT = screen_height   
-FRAME_SKIP = 4  # Procesar cada N frames para mejorar rendimiento (aumentado)
+FRAME_SKIP = 6  # Procesar cada N frames para mejorar rendimiento
 
 
 # Historial para suavizado de movimiento
@@ -192,7 +209,8 @@ smoother = CursorSmoother()
 
 # Filtro de Kalman para suavizar el movimiento del cursor
 class SimpleKalman:
-    def __init__(self, process_variance=1e-5, measurement_variance=1e-2):
+    def __init__(self, process_variance=1e-2, measurement_variance=1e-3):
+        # Ajuste: mayor varianza de proceso y menor varianza de medición para mayor sensibilidad
         self.process_variance = process_variance
         self.measurement_variance = measurement_variance
         self.posteri_estimate = 0.0
@@ -360,14 +378,14 @@ with mpgi.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True) a
                 # --- DETECCIÓN DE GUIÑOS ---
                 right_wink = is_right_wink(face_landmarks.landmark)
                 left_wink = is_left_wink(face_landmarks.landmark)
-                # Usar el ojo derecho para ratios de pupila
-                right_eye_indices = [33, 133, 160, 158, 153, 144]  # borde y centro del ojo derecho
-                horiz_ratio, vert_ratio = get_eye_ratios(face_landmarks.landmark, right_eye_indices, FRAME_WIDTH, FRAME_HEIGHT)
+                # Usar ambos ojos para ratios de pupila (horizontal y vertical)
+                # Se usa la función get_gaze_from_landmarks para obtener los ratios de pupila
+                horiz_ratio, vert_ratio = get_gaze_from_landmarks(face_landmarks, FRAME_WIDTH, FRAME_HEIGHT)
                 # Normalizar y recortar los ratios entre 0 y 1
                 horiz_ratio = np.clip(horiz_ratio, 0, 1)
                 vert_ratio = np.clip(vert_ratio, 0, 1)
                 if DEBUG:
-                    print(f"[DEBUG] Ratios pupila ojo derecho (clipped): horiz={horiz_ratio:.3f}, vert={vert_ratio:.3f}")
+                    print(f"[DEBUG] Ratios pupila (ambos ojos, clipped): horiz={horiz_ratio:.3f}, vert={vert_ratio:.3f}")
                 # Print para verificar rango de ratios
                 if not hasattr(globals(), 'min_horiz_ratio'):
                     globals()['min_horiz_ratio'] = horiz_ratio
