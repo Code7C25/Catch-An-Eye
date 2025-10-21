@@ -28,12 +28,13 @@ class OperatingMode(Enum):
 LONG_WINK_THRESHOLD = 0.8
 BOTH_EYES_CLOSED_THRESHOLD = 1.2
 DOUBLE_CLICK_INTERVAL = 0.5
-FIXATION_RADIUS = 25
+
+# --- MODIFICADO: Ajustes para Máxima Precisión ---
+FIXATION_RADIUS = 35           # Aumentado para tolerar más micro-movimiento sin romper la fijación
 FIXATION_TIME_THRESHOLD = 0.2
-DAMPING_FACTOR = 0.25
+DAMPING_FACTOR = 0.15          # Reducido para una amortiguación mucho más fuerte
 APPLY_HORIZONTAL_FLIP = True
 
-# --- Variables de control globales para comunicación entre hilos ---
 is_paused = threading.Event()
 needs_recalibration = threading.Event()
 exit_program = threading.Event()
@@ -77,7 +78,7 @@ def is_left_wink(landmarks, threshold=0.20):
     return get_eye_aspect_ratio(landmarks, [263, 387, 385, 362, 380, 373]) < threshold
 
 def get_head_pose(face_landmarks, frame_shape):
-    h, w = frame_shape
+    h, w, _ = frame_shape
     face_3d_model = np.array([
         [0.0, 0.0, 0.0], [0.0, -330.0, -65.0], [-225.0, 170.0, -135.0],
         [225.0, 170.0, -135.0], [-150.0, -150.0, -125.0], [150.0, -150.0, -125.0]
@@ -100,7 +101,7 @@ def get_head_pose(face_landmarks, frame_shape):
         x, y, z = math.atan2(rmat[2, 1], rmat[2, 2]), math.atan2(-rmat[2, 0], sy), math.atan2(rmat[1, 0], rmat[0, 0])
     else:
         x, y, z = math.atan2(-rmat[1, 2], rmat[1, 1]), math.atan2(-rmat[2, 0], sy), 0
-    return math.degrees(y), math.degrees(x) # Yaw, Pitch
+    return math.degrees(y), math.degrees(x)
 
 def calibrate(face_mesh, cap):
     print("Iniciando calibración por pose de cabeza...")
@@ -203,8 +204,9 @@ def main_loop():
                 y = int(np.clip(np.dot(affine_coeffs_y, A), 0, screen_height - 1))
                 return x, y
             
-            one_euro_filter_x = OneEuroFilter(freq=30, mincutoff=1.0, beta=0.1)
-            one_euro_filter_y = OneEuroFilter(freq=30, mincutoff=1.0, beta=0.1)
+            # MODIFICADO: Ajustes más agresivos para One-Euro Filter
+            one_euro_filter_x = OneEuroFilter(freq=30, mincutoff=0.4, beta=0.2)
+            one_euro_filter_y = OneEuroFilter(freq=30, mincutoff=0.4, beta=0.2)
             
             status_window_name = "Status"
             cv2.namedWindow(status_window_name, cv2.WINDOW_NORMAL)

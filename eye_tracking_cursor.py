@@ -42,6 +42,15 @@ import pyautogui
 pyautogui.FAILSAFE = False
 import pygetwindow as gw
 import sys
+
+# Verificar soporte CUDA en OpenCV
+try:
+    cuda_devices = cv2.cuda.getCudaEnabledDeviceCount()
+    print(f"[INFO] Dispositivos CUDA detectados por OpenCV: {cuda_devices}")
+    if cuda_devices == 0:
+        print("[ADVERTENCIA] OpenCV no detecta GPU CUDA. Verifica tu instalación de drivers y opencv-contrib-python.")
+except Exception as e:
+    print(f"[ERROR] No se pudo verificar CUDA en OpenCV: {e}")
 from collections import deque
 import time
 DEBUG = True
