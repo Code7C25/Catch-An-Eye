@@ -1,0 +1,7 @@
+# Requisitos del proyecto
+opencv-python      # Procesamiento de imágenes y video
+mediapipe         # Detección facial y landmarks (Google)
+numpy             # Operaciones matemáticas y matrices
+pyautogui         # Control del mouse y teclado
+pygetwindow       # Gestión de ventanas en el sistema
+collections       # Estructuras de datos (deque)
