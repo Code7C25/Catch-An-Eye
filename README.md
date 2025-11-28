@@ -36,9 +36,11 @@ Ventajas:
 
 ## Tecnologías utilizadas
 - Lenguaje: **Python 3.8**
-- Visión por computadora: **OpenCV**, **MediaPipe** o **dlib** (landmarks faciales)
-- Control del cursor: **PyAutoGUI** (o `autopy` / `pynput`)
-- Entre otras
+- Mediapipe(Renderizado)
+- OpenCV(Compatibilidad)
+- PyautoGUI(Compatibilidad)
+- NumPy(Cálculos)
+- Filtro One_Euro(Cálculos)
 
 ---
 
