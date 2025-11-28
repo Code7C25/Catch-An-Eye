@@ -1,49 +1,53 @@
-Readme
-
 # CATCH-AN-EYE
 
-**CATCH-AN-EYE** es un proyecto que su funcion es facilitar el uso de una computadora a las personas con una discapacidad motriz o algun tipo de problema que tenga para usar una computadora.
+**Mira, Controla, Crea**
 
-Por el momento lo que hace la aplicación es detectar el ojo, provocando reconocer a donde miramos en la pantalla, para despues poder hacer el uso cotidiano en base a los ojos  .
+---
 
-## 💻 Tecnologías utilizadas
+## ¿Que es CATCH-AN-EYE?
+CATCH-AN-EYE es una prograna que permite controlar un ordenador usando el rostro mediante una camara: sigue el movimiento del rostro para mover el cursor y guiños para ejecutar clics. Está pensada para ayudar a personas con movilidad reducida o sin alguna extremidad.
 
+---
 
-**Backend / Scraping**
+## ¿Quienes componen CATCH-AN-EYE?
+- Jerónimo Romero — Marketing y difusion de la PyMe.
+- Juan Zullo — Desarollador y tester del programa.
+- Profesora  Tamara Piccini — Asesoramiento del proyecto.
 
-* Opencv-python (Procesamiento de imágenes y video)
-* Mediapipe (Detección facial y landmarks)
-* Numpy (Operaciones matemáticas y matrices) 
-* Pyautogui (control del mouse y teclado)
-* Pygerwindow (Gestion de ventanas en el sistema)
-*Collections (Estructura de datos)
+---
 
-## 🚀 Instalación y uso
+## Problema y solución
 
-### 1. Descargar el .exe de la aplicación brindada por un desarrollador 
+**Problema:**  
+Muchas personas con movilidad reducida no pueden utilizar un mouse ni el teclado de una forma convencional, no hay siempre soluciones accesibles de bajo costo que realmente de soluciones al problema.
 
+**Solución:**  
+Detectar la dirección del rostro y reconocer guiños (izquierdo/derecho) mediante la webcam para:
+- mover el cursor según el rostro
+- realizar click / doble click / arrastrar con gestos simples,
+- proveer calibración para el usuario y opciones de sensibilidad.
 
+Ventajas:
+- Funciona con hardware barato (webcam).
+- Interfaz simple y calibración guiada.
+- Modular (se puede añadir reconocimiento de parpadeo, pestañeos largos, etc).
 
-### 3. Instalar la aplicación CATCH-AN-EYE
+---
 
+## Tecnologías utilizadas
+- Lenguaje: **Python 3.8**
+- Visión por computadora: **OpenCV**, **MediaPipe** o **dlib** (landmarks faciales)
+- Control del cursor: **PyAutoGUI** (o `autopy` / `pynput`)
+- Entre otras
 
+---
 
-### 4. Hacer la calibración para su correcto uso 
+## Video Publicitario
 
+https://drive.google.com/file/d/1OVhHTJOwOAmjFZDgZC1eY_cSBWCncrES/view?usp=sharing
 
+---
 
-### 5. Ya está lista la app para usar, y si se desea desactivar, aparecerá en la parte de aplicaciones de segundo plano 
+## Como se usa el programa?
+Es algo intuitivo, ya que lo único que hay que hacer es instalar el programa en una computadora mediante un archivo en formato rar, al terminar la instalación, le das doble click sobre la misma y ya empieza la fase de calibración para poder hacer uso del programa
 
-## 📌 Estado del proyecto
-
-Por el momento el proyecto se encuentra en **fase de desarrollo funcional**, 
-
-##  💾Próximos pasos
-
-* Mejorar la parte de la calibración.
-* Mejorar la sensibilidad al momento de hacer clicks con los ojos.
-* Optimizar la app para que sea más fluida.
-
-## 📱Contribuciones
-
-Este es un proyecto escolar, desarrollado por 2 estudiantes, pero escuchamos cualquier tipo de consulta o crítica constructiva para hacer alguna mejoría.
